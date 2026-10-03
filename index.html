@@ -108,6 +108,7 @@ body:not(.panel-closed) #panelToggle{display:none}
 #drop h2{margin:0;font-size:22px;font-weight:600}
 #drop p{margin:0;color:var(--text2);max-width:420px}
 #drop.hidden{display:none}
+#drop.over-session{background:rgba(35,35,35,.95);z-index:8}
 #drop.over{outline:3px dashed var(--tint);outline-offset:-18px;background:rgba(90,162,255,.08)}
 #drop .btn{font-size:15px;padding:11px 18px}
 
@@ -139,6 +140,7 @@ body:not(.panel-closed) #panelToggle{display:none}
   <aside id="panel">
     <h1>Ref Session <button id="panelClose" class="btn icon" style="float:right;width:34px;min-height:30px;height:30px" title="Hide panel">✕</button></h1>
     <div class="sub">Reference photos · real-size crop · grid advice</div>
+    <div class="row tight"><button class="btn" id="openPanel" style="flex:1">Open new photos / folder…</button></div>
 
     <details open>
       <summary>Canvas</summary>
@@ -162,6 +164,10 @@ body:not(.panel-closed) #panelToggle{display:none}
     <details open>
       <summary>Crop</summary>
       <div class="info" id="cropInfo">Drop a photo to begin.</div>
+      <div class="row tight">
+        <button class="btn" id="rotL" title="Rotate left ([)">⟲ Rotate</button>
+        <button class="btn" id="rotR" title="Rotate right (])">Rotate ⟳</button>
+      </div>
       <div class="row tight">
         <button class="btn" id="cropEdit">Edit crop <small class="x">C</small></button>
         <button class="btn" id="cropMax">Max</button>
@@ -238,11 +244,15 @@ body:not(.panel-closed) #panelToggle{display:none}
     <div id="toast"></div>
     <button id="showUi" title="Show controls (H)">⤡</button>
     <div id="drop">
-      <h2>Drop photos or a folder</h2>
+      <h2 id="dropTitle">Drop photos or a folder</h2>
       <p>Pick references from your library or Files. They stay on this device — nothing is uploaded.</p>
       <div class="row" style="justify-content:center">
         <button class="btn primary" id="pickFiles">Choose photos</button>
         <button class="btn" id="pickFolder">Choose folder</button>
+      </div>
+      <div class="row" style="justify-content:center">
+        <button class="btn" id="dropAdd" style="display:none">Add to current set instead</button>
+        <button class="btn" id="dropBack" style="display:none">Back to drawing</button>
       </div>
     </div>
   </main>
@@ -256,7 +266,9 @@ body:not(.panel-closed) #panelToggle{display:none}
     <select id="timerSel" title="Time per image"></select>
     <button class="btn icon" id="shuffle" title="Shuffle">⤮</button>
     <span class="spacer"></span>
-    <button class="btn icon" id="addMore" title="Add photos">＋</button>
+    <button class="btn icon" id="rotBar" title="Rotate right (])">⟳</button>
+    <button class="btn icon" id="openBtn" title="Open new photos or folder (O)">⏏</button>
+    <button class="btn icon" id="addMore" title="Add photos to this set">＋</button>
     <button class="btn icon" id="hideUi" title="Hide interface (H)">⤢</button>
   </footer>
 </div>

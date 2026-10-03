@@ -220,7 +220,7 @@ try { cropStore = JSON.parse(localStorage.getItem('refsession.crops') || '{}'); 
 let cropSaveT = 0;
 function saveCrop() {
   if (!cur) return;
-  cropStore[cur.item.key] = [cur.crop.cx, cur.crop.cy, cur.crop.z];
+  cropStore[cur.item.key] = [cur.crop.cx, cur.crop.cy, cur.crop.z, cur.rot || 0];
   clearTimeout(cropSaveT);
   cropSaveT = setTimeout(() => {
     const keys = Object.keys(cropStore);
@@ -321,9 +321,9 @@ async function filesFromDrop(dt) {
 }
 const natural = (a, b) => a.sortKey.localeCompare(b.sortKey, undefined, { numeric: true, sensitivity: 'base' });
 
-function addFiles(files) {
-  const had = Q.items.length;
-  const known = new Set(Q.items.map((i) => i.key));
+function addFiles(files, replace = false) {
+  const had = replace ? 0 : Q.items.length;
+  const known = new Set(replace ? [] : Q.items.map((i) => i.key));
   const fresh = [];
   for (const f of files) {
     if (!isImage(f)) continue;
@@ -333,11 +333,13 @@ function addFiles(files) {
     fresh.push({ file: f, name: f.name, key, sortKey: f._rel || f.webkitRelativePath || f.name });
   }
   if (!fresh.length) { toast('No new images found'); return; }
+  if (replace) { Q.items = []; Q.i = 0; }
   if (S.shuffle) { Q.items.push(...fresh); shuffleRest(had); } else { Q.items.push(...fresh); Q.items.sort(natural); }
-  toast(`${fresh.length} photo${fresh.length > 1 ? 's' : ''} added`);
+  toast(`${fresh.length} photo${fresh.length > 1 ? 's' : ''} ${replace ? 'loaded' : 'added'}`);
   $('drop').classList.add('hidden');
   if (!had) { Q.i = 0; show(0); } else { Q.i = Q.items.findIndex((i) => i === cur?.item); updateCount(); }
   if (!had && matchMedia('(max-width:820px)').matches) setPanel(false);
+  if (replace) editing && setEditing(false);
 }
 function shuffleRest(from) {
   const a = Q.items;
@@ -394,9 +396,9 @@ async function show(i) {
   tex.needsUpdate = true;
   if (cur) { cur.tex.dispose(); }
   const saved = cropStore[item.key];
-  cur = { item, tex, w, h, ow, oh, crop: saved ? { cx: saved[0], cy: saved[1], z: saved[2] } : { cx: 0.5, cy: 0.5, z: 1 } };
+  cur = { item, tex, bw: w, bh: h, bow: ow, boh: oh, w, h, ow, oh, rot: saved && saved[3] ? saved[3] : 0, crop: saved ? { cx: saved[0], cy: saved[1], z: saved[2] } : { cx: 0.5, cy: 0.5, z: 1 } };
   uniforms.uMap.value = tex;
-  mesh.scale.set(w, h, 1);
+  layoutRot();
   mesh.visible = true;
   T.left = S.dur;
   refresh({ fit: true });
@@ -404,6 +406,26 @@ async function show(i) {
   requestWake();
 }
 const next = (d = 1) => show(Q.i + d);
+
+// display size = image size after rotation; the mesh itself rotates, everything else works in display space
+function layoutRot() {
+  const odd = cur.rot % 2 === 1;
+  cur.w = odd ? cur.bh : cur.bw; cur.h = odd ? cur.bw : cur.bh;
+  cur.ow = odd ? cur.boh : cur.bow; cur.oh = odd ? cur.bow : cur.boh;
+  mesh.scale.set(cur.bw, cur.bh, 1);
+  mesh.rotation.z = (-cur.rot * Math.PI) / 2;
+}
+function rotate(dir) {
+  if (!cur) return;
+  const { cx, cy } = cur.crop;
+  cur.crop.cx = dir > 0 ? 1 - cy : cy;
+  cur.crop.cy = dir > 0 ? cx : 1 - cx;
+  cur.rot = (cur.rot + dir + 4) % 4;
+  layoutRot();
+  saveCrop();
+  fitView();
+  refresh({ fit: !editing });
+}
 
 // ======================================================================= refresh / UI render
 function refresh({ fit = false, grid = true } = {}) {
@@ -583,6 +605,9 @@ function setEditing(on) {
   editing = on; $('cropEdit').classList.toggle('on', on);
   fitView(); refresh({ grid: false }); invalidate();
 }
+$('rotL').onclick = () => rotate(-1);
+$('rotR').onclick = () => rotate(1);
+$('rotBar').onclick = () => rotate(1);
 $('cropEdit').onclick = () => cur && setEditing(!editing);
 $('cropMax').onclick = () => { if (!cur) return; cur.crop.z = 1; setZoom(1); saveCrop(); refresh({ grid: false, fit: !editing }); };
 $('cropReset').onclick = () => { if (!cur) return; cur.crop = { cx: 0.5, cy: 0.5, z: 1 }; saveCrop(); refresh({ grid: false, fit: !editing }); };
@@ -616,15 +641,31 @@ $('panelToggle').onclick = () => setPanel(true);
 $('panelClose').onclick = () => setPanel(false);
 
 // pick
-$('pickFiles').onclick = () => $('fileIn').click();
-$('addMore').onclick = () => $('fileIn').click();
-$('pickFolder').onclick = () => $('folderIn').click();
-$('fileIn').onchange = (e) => { addFiles([...e.target.files]); e.target.value = ''; };
-$('folderIn').onchange = (e) => { addFiles([...e.target.files]); e.target.value = ''; };
+let pickReplace = true;
+const pick = (id, replace) => { pickReplace = replace; $(id).click(); };
+$('pickFiles').onclick = () => pick('fileIn', true);
+$('pickFolder').onclick = () => pick('folderIn', true);
+$('addMore').onclick = () => pick('fileIn', false);
+$('dropAdd').onclick = () => pick('fileIn', false);
+$('fileIn').onchange = (e) => { addFiles([...e.target.files], pickReplace); e.target.value = ''; };
+$('folderIn').onchange = (e) => { addFiles([...e.target.files], pickReplace); e.target.value = ''; };
+// "Open…" returns to the picker without losing the current set until new photos are chosen
+function openPicker() {
+  const has = Q.items.length > 0;
+  $('drop').classList.toggle('over-session', has);
+  $('dropBack').style.display = has ? '' : 'none';
+  $('dropAdd').style.display = has ? '' : 'none';
+  $('dropTitle').textContent = has ? 'Open new photos or a folder' : 'Drop photos or a folder';
+  $('drop').classList.remove('hidden');
+  if (editing) setEditing(false);
+}
+$('openBtn').onclick = openPicker;
+$('openPanel').onclick = openPicker;
+$('dropBack').onclick = () => $('drop').classList.add('hidden');
 const stage = $('stage');
 ['dragenter', 'dragover'].forEach((ev) => stage.addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.add('over'); }));
 ['dragleave', 'drop'].forEach((ev) => stage.addEventListener(ev, (e) => { e.preventDefault(); $('drop').classList.remove('over'); }));
-stage.addEventListener('drop', async (e) => { addFiles(await filesFromDrop(e.dataTransfer)); });
+stage.addEventListener('drop', async (e) => { const picking = !$('drop').classList.contains('hidden'); addFiles(await filesFromDrop(e.dataTransfer), picking); });
 
 // ======================================================================= toast
 let toastT = 0;
@@ -762,12 +803,16 @@ addEventListener('keydown', (e) => {
   else if (k === 'arrowleft') next(-1);
   else if (k === ' ') { e.preventDefault(); $('play').click(); }
   else if (k === 'c') cur && setEditing(!editing);
+  else if (k === 'escape' && !$('drop').classList.contains('hidden') && Q.items.length) $('drop').classList.add('hidden');
   else if (k === 'escape' && editing) setEditing(false);
   else if (k === 'f') toggleLook('mirror');
   else if (k === 'g') toggleLook('gray');
   else if (k === 'v') toggleLook('values');
   else if (k === 'b') { look.blur = look.blur > 0 ? 0 : 0.5; $('blur').value = look.blur; syncLook(); }
   else if (k === 'r') { fitView(); invalidate(); }
+  else if (k === '[') rotate(-1);
+  else if (k === ']') rotate(1);
+  else if (k === 'o') openPicker();
   else if (k === 'h') toggleUi();
   else return;
 });
@@ -858,11 +903,16 @@ $('exportBtn').onclick = async () => {
       c = renderLookCanvas(R, S.burn); suffix = '_look';
     } else {
       const bmp = await loadBitmap(cur.item.file);
-      const sx = Math.round(((R.cx - R.cw / 2) / cur.w) * bmp.width), sy = Math.round(((R.cy - R.ch / 2) / cur.h) * bmp.height);
-      const sw0 = Math.round((R.cw / cur.w) * bmp.width), sh0 = Math.round((R.ch / cur.h) * bmp.height);
+      const k = bmp.width / cur.bw;
+      const sw0 = Math.round(R.cw * k), sh0 = Math.round(R.ch * k);
       c = document.createElement('canvas'); c.width = sw0; c.height = sh0;
       const ctx = c.getContext('2d');
-      ctx.drawImage(bmp, sx, sy, sw0, sh0, 0, 0, sw0, sh0);
+      ctx.imageSmoothingQuality = 'high';
+      ctx.setTransform(k, 0, 0, k, -(R.cx - R.cw / 2) * k, -(R.cy - R.ch / 2) * k);
+      ctx.translate(cur.w / 2, cur.h / 2);
+      ctx.rotate((cur.rot * Math.PI) / 2);
+      ctx.drawImage(bmp, -cur.bw / 2, -cur.bh / 2, cur.bw, cur.bh);
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       if (S.burn) drawBurn(ctx, sw0, sh0);
     }
     const sw = c.width, sh = c.height;
