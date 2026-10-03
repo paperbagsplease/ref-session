@@ -552,12 +552,13 @@ $('play').onclick = () => { T.running = !T.running; $('play').textContent = T.ru
 $('timerSel').onchange = (e) => { S.dur = +e.target.value; T.left = S.dur; save(); };
 $('shuffle').onclick = () => { S.shuffle = !S.shuffle; applyShuffle(); syncCanvasInputs(); save(); toast(S.shuffle ? 'Shuffled' : 'In order'); };
 $('hideUi').onclick = () => toggleUi();
+$('showUi').onclick = () => toggleUi();
 function toggleUi() {
   document.body.classList.toggle('hide-ui');
   if (document.body.classList.contains('hide-ui')) {
     const el = document.documentElement;
     (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el)?.catch?.(() => {});
-    toast('Tap with two fingers or press H to bring the controls back');
+    toast('Tap the ⤡ button (top right) to bring the controls back');
   } else if (document.fullscreenElement) document.exitFullscreen?.();
   setTimeout(resize, 50);
 }
