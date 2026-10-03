@@ -1,6 +1,6 @@
 import {
   WebGLRenderer, Scene, OrthographicCamera, PlaneGeometry, Mesh, ShaderMaterial, Texture, Color,
-  LinearMipmapLinearFilter, LinearFilter, DoubleSide, Vector4,
+  LinearMipmapLinearFilter, LinearFilter, DoubleSide, Vector4, WebGLRenderTarget,
 } from 'three';
 import { advise, SUBJECTS, GUIDES, guideSpec, squareLines, fmt, UNITS } from './gridAdvisor.js';
 import { VERT, FRAG } from './shader.js';
@@ -35,7 +35,7 @@ const LOOK0 = { mirror: false, gray: false, values: false, levels: 4, bias: 0, b
 const S = {
   paper: { w: 8, h: 10 }, unit: 'in', margin: 0, orient: 'auto', preset: 3,
   subject: 'figure', follow: true, gridSel: { type: 'square', cell: 1 }, guide: 'none', labels: false, gridOp: 0.8,
-  dur: 120, shuffle: false, burn: false,
+  dur: 120, shuffle: false, burn: false, exportLook: true,
 };
 const look = { ...LOOK0 };
 try { Object.assign(S, JSON.parse(localStorage.getItem('refsession.v1') || '{}')); } catch (e) { /* ignore */ }
@@ -182,7 +182,7 @@ function save() {
     try {
       localStorage.setItem('refsession.v1', JSON.stringify({
         paper: S.paper, unit: S.unit, margin: S.margin, orient: S.orient, preset: S.preset, subject: S.subject, follow: S.follow,
-        gridSel: S.gridSel, guide: S.guide, labels: S.labels, gridOp: S.gridOp, dur: S.dur, shuffle: S.shuffle, burn: S.burn,
+        gridSel: S.gridSel, guide: S.guide, labels: S.labels, gridOp: S.gridOp, dur: S.dur, shuffle: S.shuffle, burn: S.burn, exportLook: S.exportLook,
       }));
     } catch (e) { /* storage blocked */ }
   }, 250);
@@ -473,7 +473,7 @@ function syncCanvasInputs() {
   $('margin').value = fmt(S.margin);
   document.querySelectorAll('#unitSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.unit));
   document.querySelectorAll('#orientSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === S.orient));
-  $('gridOp').value = S.gridOp; $('burnGrid').checked = S.burn;
+  $('gridOp').value = S.gridOp; $('burnGrid').checked = S.burn; $('exportLook').checked = S.exportLook;
   $('timerSel').value = String(S.dur);
   $('shuffle').classList.toggle('on', S.shuffle);
 }
@@ -514,6 +514,7 @@ $('follow').onchange = (e) => { S.follow = e.target.checked; refresh(); };
 $('labels').onchange = (e) => { S.labels = e.target.checked; save(); invalidate(); };
 $('gridOp').oninput = (e) => { S.gridOp = +e.target.value; save(); invalidate(); };
 $('burnGrid').onchange = (e) => { S.burn = e.target.checked; save(); };
+$('exportLook').onchange = (e) => { S.exportLook = e.target.checked; save(); };
 
 // look
 const lookBtns = { tMirror: 'mirror', tGray: 'gray', tValues: 'values' };
@@ -764,27 +765,63 @@ function withDpi(bytes, ppi) {
   out.set(bytes.subarray(0, 33), 0); out.set(chunk, 33); out.set(bytes.subarray(33), 54);
   return out;
 }
+const lookActive = () => look.gray || look.values || look.blur > 0 || Math.abs(look.contrast - 1) > 0.005 || Math.abs(look.bright) > 0.005 || look.mirror;
+
+// Renders the crop through the same shader (look + optional grid) into an offscreen target.
+function renderLookCanvas(R, withGrid) {
+  const w = Math.max(1, Math.round(R.cw)), h = Math.max(1, Math.round(R.ch));
+  const rt = new WebGLRenderTarget(w, h, { depthBuffer: false });
+  const c2 = new OrthographicCamera(R.minX, R.maxX, R.maxY, R.minY, -10, 10);
+  if (look.mirror) { c2.left = R.maxX; c2.right = R.minX; c2.updateProjectionMatrix(); }
+  const keep = ['uAnv', 'uAnh', 'uBnv', 'uBnh', 'uBns', 'uOutside', 'uEdit', 'uLineW'].map((k) => [k, uniforms[k].value]);
+  uniforms.uCrop.value.set(R.minX, R.minY, R.maxX, R.maxY);
+  uniforms.uOutside.value = 1; uniforms.uEdit.value = 0;
+  uniforms.uGray.value = look.gray || look.values ? 1 : 0; uniforms.uLevels.value = look.values ? look.levels : 0;
+  uniforms.uBias.value = look.bias; uniforms.uBlur.value = look.blur; uniforms.uContrast.value = look.contrast; uniforms.uBright.value = look.bright;
+  if (withGrid) uniforms.uLineW.value = Math.max(1.5, w / 900);
+  else ['uAnv', 'uAnh', 'uBnv', 'uBnh', 'uBns'].forEach((k) => (uniforms[k].value = 0));
+  renderer.setRenderTarget(rt);
+  renderer.render(scene, c2);
+  const buf = new Uint8Array(w * h * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, w, h, buf);
+  renderer.setRenderTarget(null);
+  keep.forEach(([k, v]) => (uniforms[k].value = v));
+  rt.dispose();
+  const img = new ImageData(w, h);
+  for (let y = 0; y < h; y++) img.data.set(buf.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').putImageData(img, 0, 0);
+  invalidate();
+  return c;
+}
+
 $('exportBtn').onclick = async () => {
   if (!cur) return toast('Load a photo first');
   try {
     toast('Preparing crop…');
-    const bmp = await loadBitmap(cur.item.file);
     const R = cropRect();
-    const sx = Math.round(((R.cx - R.cw / 2) / cur.w) * bmp.width), sy = Math.round(((R.cy - R.ch / 2) / cur.h) * bmp.height);
-    const sw = Math.round((R.cw / cur.w) * bmp.width), sh = Math.round((R.ch / cur.h) * bmp.height);
-    const c = document.createElement('canvas'); c.width = sw; c.height = sh;
-    const ctx = c.getContext('2d');
-    ctx.drawImage(bmp, sx, sy, sw, sh, 0, 0, sw, sh);
-    if (S.burn) drawBurn(ctx, sw, sh);
+    let c, suffix = '';
+    if (S.exportLook && lookActive()) {
+      c = renderLookCanvas(R, S.burn); suffix = '_look';
+    } else {
+      const bmp = await loadBitmap(cur.item.file);
+      const sx = Math.round(((R.cx - R.cw / 2) / cur.w) * bmp.width), sy = Math.round(((R.cy - R.ch / 2) / cur.h) * bmp.height);
+      const sw0 = Math.round((R.cw / cur.w) * bmp.width), sh0 = Math.round((R.ch / cur.h) * bmp.height);
+      c = document.createElement('canvas'); c.width = sw0; c.height = sh0;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(bmp, sx, sy, sw0, sh0, 0, 0, sw0, sh0);
+      if (S.burn) drawBurn(ctx, sw0, sh0);
+    }
+    const sw = c.width, sh = c.height;
     const blob = await new Promise((res) => c.toBlob(res, 'image/png'));
     const bytes = withDpi(new Uint8Array(await blob.arrayBuffer()), sw / (A.dw * UNITS[S.unit]));
     const base = cur.item.name.replace(/\.[^.]+$/, '');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([bytes], { type: 'image/png' }));
-    a.download = `${base}_${fmt(A.dw)}x${fmt(A.dh)}${S.unit}.png`;
+    a.download = `${base}_${fmt(A.dw)}x${fmt(A.dh)}${S.unit}${suffix}.png`;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    toast(`Saved ${sw} × ${sh} px · prints at ${fmt(A.dw)} × ${fmt(A.dh)} ${S.unit}`);
+    toast(`Saved ${sw} × ${sh} px${suffix ? ' with your look' : ''} · prints at ${fmt(A.dw)} × ${fmt(A.dh)} ${S.unit}`);
   } catch (e) { console.error(e); toast('Export failed'); }
 };
 function drawBurn(ctx, w, h) {
