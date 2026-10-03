@@ -261,6 +261,28 @@ body:not(.panel-closed) #panelToggle{display:none}
 </div>
 <input type="file" id="fileIn" accept="image/*" multiple hidden>
 <input type="file" id="folderIn" webkitdirectory multiple hidden>
+<div id="bootFail" style="display:none;position:fixed;inset:0;z-index:99;background:#232323;color:#f2f2f4;padding:calc(env(safe-area-inset-top) + 40px) 24px;text-align:center;font:15px/1.5 -apple-system,system-ui,sans-serif">
+  <h2 style="margin:0 0 8px">Ref Session didn't start</h2>
+  <p style="color:#aaa;max-width:440px;margin:0 auto 18px">Usually an out-of-date saved copy. Tap below to clear it and reload (your photos and crops aren't touched).</p>
+  <button id="bootReset" style="font:inherit;font-weight:600;padding:12px 20px;border:0;border-radius:11px;background:#5aa2ff;color:#06131f">Reset and reload</button>
+  <p id="bootErr" style="color:#777;font-size:12px;margin-top:22px;word-break:break-word"></p>
+</div>
+<script>
+window.__bootErr = [];
+addEventListener('error', function (e) { __bootErr.push(e.message || String(e)); });
+addEventListener('unhandledrejection', function (e) { __bootErr.push(String(e.reason)); });
+document.getElementById('bootReset').onclick = async function () {
+  try { var rs = await navigator.serviceWorker.getRegistrations(); for (var r of rs) await r.unregister(); } catch (e) {}
+  try { for (var k of await caches.keys()) await caches.delete(k); } catch (e) {}
+  location.reload();
+};
+setTimeout(function () {
+  if (!window.refSession) {
+    document.getElementById('bootErr').textContent = __bootErr.slice(0, 3).join(' · ');
+    document.getElementById('bootFail').style.display = 'block';
+  }
+}, 4000);
+</script>
 <script src="app.js"></script>
 </body>
 </html>

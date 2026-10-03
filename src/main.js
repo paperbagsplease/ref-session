@@ -894,7 +894,7 @@ function drawBurn(ctx, w, h) {
 // ======================================================================= boot
 if (!matchMedia('(max-width:820px)').matches) document.body.classList.remove('panel-closed');
 else document.body.classList.add('panel-closed');
-if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
 
 syncCanvasInputs();
 renderPigmentUI();
