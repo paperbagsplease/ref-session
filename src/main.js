@@ -652,10 +652,11 @@ canvas.addEventListener('pointerdown', (e) => {
   if (!cur) return;
   if (e.pointerType === 'pen') penActive = true;
   else if (e.pointerType === 'touch' && penActive) return; // palm rejection
-  canvas.setPointerCapture(e.pointerId);
+  try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* synthetic or already released */ }
   const [px, py] = local(e);
-  ptrs.set(e.pointerId, { x: px, y: py, type: e.pointerType });
+  ptrs.set(e.pointerId, { x: px, y: py, x0: px, y0: py, t0: performance.now(), moved: false, type: e.pointerType });
   if (ptrs.size === 2) {
+    sawMulti = true;
     const [a, b] = [...ptrs.values()];
     gesture = { kind: 'pinch', d0: Math.hypot(a.x - b.x, a.y - b.y) || 1, s0: V.s };
     return;
@@ -678,6 +679,7 @@ canvas.addEventListener('pointermove', (e) => {
     return;
   }
   p.x = px; p.y = py;
+  if (Math.hypot(px - p.x0, py - p.y0) > 8) p.moved = true;
   if (!gesture) return;
   if (gesture.kind === 'pinch' && ptrs.size >= 2) {
     const [a, b] = [...ptrs.values()];
@@ -711,11 +713,26 @@ function resizeFrom(ci, wx, wy) {
   const cwx = ax + sx * w / 2, cwy = ay + sy * h / 2;
   cur.crop.cx = (cwx + cur.w / 2) / cur.w; cur.crop.cy = (cur.h / 2 - cwy) / cur.h;
 }
+let sawMulti = false;
+let lastTap = { t: 0, x: 0, y: 0 };
 function endPointer(e) {
+  const p = ptrs.get(e.pointerId);
+  const wasSingle = ptrs.size === 1;
   ptrs.delete(e.pointerId);
   if (e.pointerType === 'pen') setTimeout(() => (penActive = false), 400);
-  if (ptrs.size < 2 && gesture && gesture.kind === 'pinch') gesture = null;
-  if (!ptrs.size) gesture = null;
+  // a real double-tap = two quick, still, single-finger taps (never the end of a pinch or drag)
+  if (e.type === 'pointerup' && p && wasSingle && !sawMulti && !p.moved && performance.now() - p.t0 < 300) {
+    const now = performance.now();
+    if (now - lastTap.t < 350 && Math.hypot(p.x - lastTap.x, p.y - lastTap.y) < 30) { fitView(); invalidate(); lastTap.t = 0; }
+    else lastTap = { t: now, x: p.x, y: p.y };
+  }
+  if (gesture && gesture.kind === 'pinch' && ptrs.size === 1) {
+    // hand the remaining finger back to panning so the view doesn't jump
+    const [r] = [...ptrs.values()];
+    gesture = { kind: 'pan', x0: r.x, y0: r.y, vx: V.x, vy: V.y };
+    r.moved = true;
+  } else if (!ptrs.size) gesture = null;
+  if (!ptrs.size) sawMulti = false;
 }
 canvas.addEventListener('pointerup', endPointer);
 canvas.addEventListener('pointercancel', endPointer);
@@ -724,14 +741,6 @@ canvas.addEventListener('wheel', (e) => {
   const [px, py] = local(e);
   zoomAt(px, py, V.s * Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0016)));
 }, { passive: false });
-let lastTap = 0;
-canvas.addEventListener('pointerup', (e) => {
-  if (e.pointerType === 'mouse') return;
-  const now = performance.now();
-  if (now - lastTap < 320) { fitView(); invalidate(); }
-  lastTap = now;
-});
-canvas.addEventListener('dblclick', () => { fitView(); invalidate(); });
 // two-finger tap in hidden-UI mode brings controls back
 canvas.addEventListener('touchstart', (e) => {
   if (e.touches.length === 3 || (e.touches.length === 2 && document.body.classList.contains('hide-ui') && !penActive)) {
