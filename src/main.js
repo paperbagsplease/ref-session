@@ -2,7 +2,7 @@ import {
   WebGLRenderer, Scene, OrthographicCamera, PlaneGeometry, Mesh, ShaderMaterial, Texture, Color,
   LinearMipmapLinearFilter, LinearFilter, DoubleSide, Vector4, WebGLRenderTarget,
 } from 'three';
-import { advise, SUBJECTS, GUIDES, guideSpec, squareLines, fmt, UNITS } from './gridAdvisor.js';
+import { advise, stepCell, SUBJECTS, GUIDES, guideSpec, squareLines, fmt, UNITS } from './gridAdvisor.js';
 import { VERT, FRAG } from './shader.js';
 
 const $ = (id) => document.getElementById(id);
@@ -469,12 +469,12 @@ function renderGridUI() {
   // subject chips
   $('subjects').innerHTML = Object.entries(SUBJECTS).map(([k, v]) => `<button class="chip ${S.subject === k ? 'on' : ''}" data-k="${k}">${v.label}</button>`).join('');
   // transfer cards
-  const order = [adv.loose, adv.best, adv.fine].filter(Boolean);
-  const labels = { loose: 'Looser', best: 'Best fit', fine: 'Finer' };
+  const order = [adv.loosest, adv.loose, adv.best, adv.fine].filter(Boolean).sort((x, y) => y.cell - x.cell);
+  const labels = { loosest: 'Loosest', loose: 'Looser', best: 'Best fit', fine: 'Finer' };
   $('cards').innerHTML = order.map((c) => {
     const on = S.gridSel.type === 'square' && Math.abs(S.gridSel.cell - c.cell) < 1e-6;
-    return `<div class="card ${on ? 'on' : ''}" data-cell="${c.cell}" data-role="${c.role}">${c.role === 'best' ? '<span class="badge">RECOMMENDED</span>' : ''}`
-      + miniSvg(c.lines, A.ratio, '#fff', true) + `<div class="t">${fmt(c.cell)} ${S.unit}</div><div class="g">${c.cols} × ${c.rows} · ${labels[c.role]}</div></div>`;
+    return `<div class="card ${on ? 'on' : ''}" data-cell="${c.cell}" data-role="${c.role}">${c.role === 'best' ? '<span class="badge">★ BEST</span>' : ''}`
+      + miniSvg(c.lines, A.ratio, '#fff', true) + `<div class="t">${fmt(c.cell)} ${S.unit}</div><div class="g">${c.cols} × ${c.rows}</div><div class="g">${labels[c.role]}</div></div>`;
   }).join('');
   // advice text
   const sel = order.find((c) => S.gridSel.type === 'square' && Math.abs(S.gridSel.cell - c.cell) < 1e-6);
@@ -536,6 +536,12 @@ $('cards').onclick = (e) => {
   S.gridSel = { type: 'square', cell: +c.dataset.cell }; S.follow = c.dataset.role === 'best'; refresh();
 };
 $('guides').onclick = (e) => { const c = e.target.closest('.card'); if (!c) return; S.guide = S.guide === c.dataset.g ? 'none' : c.dataset.g; refresh(); };
+function stepGrid(dir) {
+  const cur0 = S.gridSel.type === 'square' ? S.gridSel.cell : (adv.best ? adv.best.cell : 1);
+  S.gridSel = { type: 'square', cell: stepCell(cur0, dir, A.dw, A.dh, S.unit) }; S.follow = false; refresh();
+}
+$('gridLooser').onclick = () => stepGrid(1);
+$('gridFiner').onclick = () => stepGrid(-1);
 $('customApply').onclick = () => { const v = +$('customCell').value; if (v > 0) { S.gridSel = { type: 'square', cell: v }; S.follow = false; refresh(); } };
 $('gridNone').onclick = () => { S.gridSel = { type: 'none' }; S.follow = false; refresh(); };
 $('follow').onchange = (e) => { S.follow = e.target.checked; refresh(); };

@@ -36,6 +36,8 @@ body.hide-ui #app{grid-template-columns:1fr}
 #panel{grid-row:1/3;width:var(--panel-w);background:var(--panel);overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding:calc(var(--sat) + 12px) 14px calc(var(--sab) + 18px) calc(var(--sal) + 14px);border-right:1px solid rgba(0,0,0,.4);transition:margin-left .2s}
 body.panel-closed #panel{margin-left:calc(-1 * var(--panel-w) - 2px)}
+#topScrim{position:fixed;left:0;top:0;width:var(--panel-w);height:var(--sat);background:var(--panel);z-index:30;pointer-events:none}
+body.panel-closed #topScrim,body.hide-ui #topScrim{display:none}
 #panel h1{font-size:15px;margin:0 0 2px;letter-spacing:.2px}
 #panel .sub{color:var(--text3);font-size:12px;margin-bottom:10px}
 details{border-top:1px solid rgba(255,255,255,.07);padding:8px 0}
@@ -70,13 +72,13 @@ input[type=range]{flex:1;min-width:90px;accent-color:var(--tint);height:30px}
 .check input{width:20px;height:20px;accent-color:var(--tint)}
 
 /* grid cards */
-.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:8px 0}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}
 .card{background:var(--fill);border:1px solid transparent;border-radius:11px;padding:7px 6px 8px;cursor:pointer;text-align:center;position:relative}
 .card.on{border-color:var(--tint);background:var(--tint-soft)}
-.card svg{width:100%;height:56px;display:block}
-.card .t{font-size:11px;font-weight:600;margin-top:4px}
-.card .g{font-size:10.5px;color:var(--text3)}
-.card .badge{position:absolute;top:-7px;left:50%;transform:translateX(-50%);background:var(--tint);color:#06131f;font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:99px;letter-spacing:.4px;white-space:nowrap}
+.card svg{width:100%;height:46px;display:block}
+.card .t{font-size:11.5px;font-weight:600;margin-top:4px}
+.card .g{font-size:10px;color:var(--text3)}
+.card .badge{position:absolute;top:-7px;left:50%;transform:translateX(-50%);background:var(--tint);color:#06131f;font-size:8.5px;font-weight:700;padding:1px 7px;border-radius:99px;letter-spacing:.4px;white-space:nowrap}
 .guides{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin:8px 0}
 .guides .card{padding:5px 3px}
 .guides .card svg{height:34px}
@@ -133,6 +135,7 @@ body:not(.panel-closed) #panelToggle{display:none}
 </head>
 <body>
 <div id="app">
+  <div id="topScrim"></div>
   <aside id="panel">
     <h1>Ref Session <button id="panelClose" class="btn icon" style="float:right;width:34px;min-height:30px;height:30px" title="Hide panel">✕</button></h1>
     <div class="sub">Reference photos · real-size crop · grid advice</div>
@@ -178,6 +181,7 @@ body:not(.panel-closed) #panelToggle{display:none}
       <div class="info"><b>Transfer grid</b> — for copying onto your paper</div>
       <div class="cards" id="cards"></div>
       <div class="advice" id="advice"></div>
+      <div class="row tight"><button class="btn" id="gridLooser" style="flex:1">← Looser</button><button class="btn" id="gridFiner" style="flex:1">Finer →</button></div>
       <div class="row tight">
         <label style="min-width:auto">Custom cell</label>
         <input id="customCell" type="number" step="any" min="0.1" inputmode="decimal">

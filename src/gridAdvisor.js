@@ -5,9 +5,9 @@ export const UNITS = { in: 1, cm: 1 / 2.54, mm: 1 / 25.4 }; // → inches
 const CM_PER = { in: 2.54, cm: 1, mm: 0.1 };
 
 const NICE = {
-  in: [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6],
-  cm: [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10],
-  mm: [10, 15, 20, 25, 30, 40, 50, 60, 80, 100],
+  in: [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12],
+  cm: [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10, 12, 15, 20],
+  mm: [10, 15, 20, 25, 30, 40, 50, 60, 80, 100, 120, 150, 200],
 };
 
 // ideal = cells along the LONG side of the drawing; lo/hi = comfortable range.
@@ -40,12 +40,12 @@ function niceness(c, unit) {
   return 0.35;
 }
 
-function penalty(c, dw, dh, unit, ideal, subj) {
+function penalty(c, dw, dh, unit, ideal, subj, minShort = 1.5) {
   const cols = dw / c;
   const rows = dh / c;
   const L = Math.max(cols, rows);
   const S = Math.min(cols, rows);
-  if (S < 1.5) return Infinity;
+  if (S < minShort) return Infinity;
   let p = 0;
   p += 3.5 * (distToInt(cols) + distToInt(rows));
   const lr = Math.log(L / ideal);
@@ -70,7 +70,7 @@ function candidates(dw, dh, unit) {
   NICE[unit].forEach(add);
   // cells that divide the long side evenly (e.g. 14 in / 7 = 2 in)
   const long = Math.max(dw, dh);
-  for (let n = 3; n <= 20; n++) {
+  for (let n = 2; n <= 20; n++) {
     const c = long / n;
     if (distToInt(c * (unit === 'in' ? 8 : unit === 'cm' ? 10 : 1)) < 1e-6) add(c);
   }
@@ -160,12 +160,12 @@ const GUIDE_ORDER = {
 export function advise({ dw, dh, unit, subject }) {
   const subj = SUBJECTS[subject] || SUBJECTS.other;
   const cands = candidates(dw, dh, unit);
-  const pick = (ideal, exclude = new Set()) => {
+  const pick = (ideal, exclude = new Set(), minShort = 1.5, minCell = 0) => {
     let best = null;
     for (const c of cands) {
       const key = Math.round(c * 1000);
-      if (exclude.has(key)) continue;
-      const p = penalty(c, dw, dh, unit, ideal, subj);
+      if (exclude.has(key) || c < minCell) continue;
+      const p = penalty(c, dw, dh, unit, ideal, subj, minShort);
       if (!best || p < best.p) best = { c, p };
     }
     return best;
@@ -176,6 +176,7 @@ export function advise({ dw, dh, unit, subject }) {
   const loose = pick(subj.ideal * 0.6, used);
   if (loose) used.add(Math.round(loose.c * 1000));
   const fine = pick(subj.ideal * 1.6, used);
+  const loosest = pick(subj.ideal * 0.3, used, 1.0, loose ? loose.c * 1.4 : 0);
 
   const describe = (r, role) => {
     if (!r) return null;
@@ -197,6 +198,7 @@ export function advise({ dw, dh, unit, subject }) {
     const L = Math.max(cols, rows);
     if (role === 'best') why.push(`${Math.round(L * 10) / 10} cells along the long side — ${subj.note}.`);
     if (role === 'loose') why.push('Fewer cells: good for gesture, block-in and big shapes.');
+    if (role === 'loosest') why.push('Very few cells: just placement and the biggest shapes — ideal for a loose start.');
     if (role === 'fine') why.push('More cells: good for tight rendering and small details.');
     const cm = c * CM_PER[unit];
     if (cm < 1.5) why.push('Cells are small — fiddly to draw on paper.');
@@ -220,9 +222,17 @@ export function advise({ dw, dh, unit, subject }) {
 
   return {
     best: describe(main, 'best'),
+    loosest: describe(loosest, 'loosest'),
     loose: describe(loose, 'loose'),
     fine: describe(fine, 'fine'),
     guides,
     subjectLabel: subj.label,
   };
+}
+
+// Step the transfer grid one notch looser (dir > 0, bigger cells) or finer (dir < 0).
+export function stepCell(cell, dir, dw, dh, unit) {
+  const cands = candidates(dw, dh, unit).filter((c) => Math.min(dw, dh) / c >= 1.2).sort((x, y) => x - y);
+  if (dir > 0) return cands.find((c) => c > cell * 1.02) ?? cell;
+  return [...cands].reverse().find((c) => c < cell / 1.02) ?? cell;
 }
