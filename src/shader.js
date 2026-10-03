@@ -11,6 +11,8 @@ void main() {
 export const FRAG = /* glsl */ `
 uniform sampler2D uMap;
 uniform vec4 uCrop;
+uniform float uTint, uWash;
+uniform vec3 uMass, uGround;
 uniform float uOutside, uEdit, uGray, uLevels, uBias, uBlur, uContrast, uBright, uLineW, uOpA, uOpB;
 uniform vec3 uColA, uColB;
 uniform int uAnv, uAnh, uBnv, uBnh, uBns;
@@ -45,6 +47,11 @@ void main() {
     float q = clamp(l + uBias, 0.0, 1.0);
     float lv = min(floor(q * uLevels), uLevels - 1.0) / (uLevels - 1.0);
     c = vec3(lv);
+  }
+  if (uTint > 0.5) {
+    float lt = dot(c, vec3(0.2126, 0.7152, 0.0722));
+    float t = clamp((1.0 - lt) * uWash, 0.0, 1.0);
+    c = uGround * (vec3(1.0) - t * (vec3(1.0) - uMass));
   }
 
   vec2 px = fwidth(vW);

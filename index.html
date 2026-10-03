@@ -59,6 +59,7 @@ input[type=range]{flex:1;min-width:90px;accent-color:var(--tint);height:30px}
 .btn.primary{background:var(--tint);color:#06131f;font-weight:600}
 .btn.on{background:var(--tint-soft);color:var(--tint);box-shadow:inset 0 0 0 1px var(--tint)}
 .btn.icon{width:40px;padding:0;display:inline-flex;align-items:center;justify-content:center;font-size:16px}
+.chip .dot{display:inline-block;width:11px;height:11px;border-radius:50%;margin-right:6px;vertical-align:-1px;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
 .chip{border:0;background:var(--fill);padding:7px 11px;border-radius:99px;cursor:pointer;color:var(--text2);min-height:32px}
 .chip.on{background:var(--tint-soft);color:var(--tint);box-shadow:inset 0 0 0 1px var(--tint)}
@@ -192,12 +193,19 @@ body:not(.panel-closed) #panelToggle{display:none}
       <div class="row"><label>Opacity</label><input id="gridOp" type="range" min="0.15" max="1" step="0.01" value="0.8"></div>
     </details>
 
-    <details>
+    <details open>
       <summary>Look</summary>
       <div class="row tight">
         <button class="btn" id="tMirror">Mirror <small class="x">F</small></button>
         <button class="btn" id="tGray">Gray <small class="x">G</small></button>
         <button class="btn" id="tValues">Values <small class="x">V</small></button>
+      </div>
+      <div id="tintRows">
+        <div class="info" style="margin-top:10px"><b>Glaze tint</b> — values as a transparent pigment wash</div>
+        <div class="chips" id="pigments"></div>
+        <div class="info">Ground</div>
+        <div class="chips" id="grounds"></div>
+        <div class="row"><label>Wash</label><input id="wash" type="range" min="0.3" max="1.2" step="0.01" value="1"></div>
       </div>
       <div class="row"><label>Levels</label><input id="levels" type="range" min="2" max="8" step="1" value="4"><span id="levelsV" class="x">4</span></div>
       <div class="row"><label>Threshold</label><input id="bias" type="range" min="-0.4" max="0.4" step="0.01" value="0"></div>

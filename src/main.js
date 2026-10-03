@@ -30,7 +30,27 @@ const PRESETS = [
 ];
 const TIMES = [[0, 'No timer'], [15, '15 s'], [30, '30 s'], [45, '45 s'], [60, '1 min'], [120, '2 min'], [300, '5 min'],
   [600, '10 min'], [1200, '20 min'], [1800, '30 min'], [3600, '60 min']];
-const LOOK0 = { mirror: false, gray: false, values: false, levels: 4, bias: 0, blur: 0, contrast: 1, bright: 0 };
+// Mass-tone approximations (sRGB 0-1) of transparent glaze pigments at full strength
+const PIGMENTS = [
+  ['Ultramarine', [0.09, 0.11, 0.42]],
+  ['Burnt Sienna', [0.38, 0.14, 0.07]],
+  ['Quinacridone Magenta', [0.45, 0.03, 0.25]],
+  ['Burnt Umber', [0.24, 0.14, 0.08]],
+  ['Raw Umber', [0.27, 0.21, 0.10]],
+  ['Transparent Red Oxide', [0.45, 0.18, 0.06]],
+  ['Alizarin Crimson', [0.40, 0.04, 0.09]],
+  ['Prussian Blue', [0.02, 0.10, 0.20]],
+  ['Phthalo Green', [0.0, 0.22, 0.16]],
+  ['Sap Green', [0.20, 0.27, 0.05]],
+  ["Payne's Grey", [0.14, 0.17, 0.22]],
+];
+const GROUNDS = [
+  ['White', [1, 1, 1]],
+  ['Cream', [0.95, 0.9, 0.78]],
+  ['Imprimatura', [0.86, 0.72, 0.5]],
+  ['Mid grey', [0.66, 0.66, 0.66]],
+];
+const LOOK0 = { mirror: false, gray: false, values: false, levels: 4, bias: 0, blur: 0, contrast: 1, bright: 0, tint: -1, ground: 0, wash: 1 };
 
 const S = {
   paper: { w: 8, h: 10 }, unit: 'in', margin: 0, orient: 'auto', preset: 3,
@@ -38,6 +58,7 @@ const S = {
   dur: 120, shuffle: false, burn: false, exportLook: true,
 };
 const look = { ...LOOK0 };
+try { const p = JSON.parse(localStorage.getItem('refsession.pig') || '{}'); ['tint', 'ground', 'wash'].forEach((k) => { if (typeof p[k] === 'number') look[k] = p[k]; }); } catch (e) { /* ignore */ }
 try { Object.assign(S, JSON.parse(localStorage.getItem('refsession.v1') || '{}')); } catch (e) { /* ignore */ }
 
 const Q = { items: [], i: 0 };
@@ -59,7 +80,7 @@ const scene = new Scene();
 const cam = new OrthographicCamera(-1, 1, 1, -1, -10, 10);
 const uniforms = {
   uMap: { value: null }, uCrop: { value: new Vector4() }, uOutside: { value: 1 }, uEdit: { value: 0 },
-  uGray: { value: 0 }, uLevels: { value: 0 }, uBias: { value: 0 }, uBlur: { value: 0 }, uContrast: { value: 1 }, uBright: { value: 0 },
+  uGray: { value: 0 }, uTint: { value: 0 }, uWash: { value: 1 }, uMass: { value: [1, 1, 1] }, uGround: { value: [1, 1, 1] }, uLevels: { value: 0 }, uBias: { value: 0 }, uBlur: { value: 0 }, uContrast: { value: 1 }, uBright: { value: 0 },
   uLineW: { value: 1.2 }, uOpA: { value: 0.8 }, uOpB: { value: 0.8 },
   uColA: { value: [1, 1, 1] }, uColB: { value: [1, 0.706, 0.329] },
   uAnv: { value: 0 }, uAnh: { value: 0 }, uBnv: { value: 0 }, uBnh: { value: 0 }, uBns: { value: 0 },
@@ -89,6 +110,16 @@ function invalidate() { if (!dirty) { dirty = true; requestAnimationFrame(render
 const mirrored = () => look.mirror && !editing;
 const m = () => (mirrored() ? -1 : 1);
 
+function setLookUniforms() {
+  uniforms.uGray.value = look.gray || look.values ? 1 : 0;
+  uniforms.uLevels.value = look.values ? look.levels : 0;
+  uniforms.uBias.value = look.bias; uniforms.uBlur.value = look.blur;
+  uniforms.uContrast.value = look.contrast; uniforms.uBright.value = look.bright;
+  uniforms.uTint.value = look.tint >= 0 ? 1 : 0;
+  uniforms.uWash.value = look.wash;
+  if (look.tint >= 0) uniforms.uMass.value = PIGMENTS[look.tint][1];
+  uniforms.uGround.value = GROUNDS[look.ground][1];
+}
 function render() {
   dirty = false;
   const hw = vw / (2 * V.s), hh = vh / (2 * V.s);
@@ -100,10 +131,7 @@ function render() {
     uniforms.uCrop.value.set(R.minX, R.minY, R.maxX, R.maxY);
     uniforms.uOutside.value = editing ? 0.7 : 1;
     uniforms.uEdit.value = editing ? 1 : 0;
-    uniforms.uGray.value = look.gray || look.values ? 1 : 0;
-    uniforms.uLevels.value = look.values ? look.levels : 0;
-    uniforms.uBias.value = look.bias; uniforms.uBlur.value = look.blur;
-    uniforms.uContrast.value = look.contrast; uniforms.uBright.value = look.bright;
+    setLookUniforms();
     uniforms.uOpA.value = S.gridOp; uniforms.uOpB.value = S.gridOp;
   }
   renderer.render(scene, cam);
@@ -518,6 +546,18 @@ $('exportLook').onchange = (e) => { S.exportLook = e.target.checked; save(); };
 
 // look
 const lookBtns = { tMirror: 'mirror', tGray: 'gray', tValues: 'values' };
+const swatch = (m, g) => `rgb(${[0, 1, 2].map((i) => Math.round(255 * g[i] * (1 - 0.8 * (1 - m[i])))).join(',')})`;
+function renderPigmentUI() {
+  $('pigments').innerHTML = `<button class="chip ${look.tint < 0 ? 'on' : ''}" data-i="-1">None</button>`
+    + PIGMENTS.map((p, i) => `<button class="chip ${look.tint === i ? 'on' : ''}" data-i="${i}"><span class="dot" style="background:${swatch(p[1], [1, 1, 1])}"></span>${p[0]}</button>`).join('');
+  $('grounds').innerHTML = GROUNDS.map((g, i) => `<button class="chip ${look.ground === i ? 'on' : ''}" data-i="${i}"><span class="dot" style="background:rgb(${g[1].map((v) => Math.round(v * 255)).join(',')})"></span>${g[0]}</button>`).join('');
+  $('wash').value = look.wash;
+  $('tintRows').style.opacity = look.tint < 0 ? 0.55 : 1;
+}
+function savePig() { try { localStorage.setItem('refsession.pig', JSON.stringify({ tint: look.tint, ground: look.ground, wash: look.wash })); } catch (e) { /* ignore */ } }
+$('pigments').onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; look.tint = +b.dataset.i; renderPigmentUI(); savePig(); syncLook(); };
+$('grounds').onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; look.ground = +b.dataset.i; renderPigmentUI(); savePig(); syncLook(); };
+$('wash').oninput = (e) => { look.wash = +e.target.value; savePig(); syncLook(); };
 function syncLook() {
   Object.entries(lookBtns).forEach(([id, k]) => $(id).classList.toggle('on', look[k]));
   $('levelsV').textContent = look.levels;
@@ -530,7 +570,7 @@ function toggleLook(k) { look[k] = !look[k]; if (k === 'mirror' && editing && lo
 });
 $('lookReset').onclick = () => {
   Object.assign(look, LOOK0);
-  ['levels', 'bias', 'blur', 'contrast', 'bright'].forEach((id) => ($(id).value = look[id])); syncLook();
+  ['levels', 'bias', 'blur', 'contrast', 'bright'].forEach((id) => ($(id).value = look[id])); renderPigmentUI(); savePig(); syncLook();
 };
 
 // crop
@@ -765,7 +805,7 @@ function withDpi(bytes, ppi) {
   out.set(bytes.subarray(0, 33), 0); out.set(chunk, 33); out.set(bytes.subarray(33), 54);
   return out;
 }
-const lookActive = () => look.gray || look.values || look.blur > 0 || Math.abs(look.contrast - 1) > 0.005 || Math.abs(look.bright) > 0.005 || look.mirror;
+const lookActive = () => look.tint >= 0 || look.gray || look.values || look.blur > 0 || Math.abs(look.contrast - 1) > 0.005 || Math.abs(look.bright) > 0.005 || look.mirror;
 
 // Renders the crop through the same shader (look + optional grid) into an offscreen target.
 function renderLookCanvas(R, withGrid) {
@@ -776,8 +816,7 @@ function renderLookCanvas(R, withGrid) {
   const keep = ['uAnv', 'uAnh', 'uBnv', 'uBnh', 'uBns', 'uOutside', 'uEdit', 'uLineW'].map((k) => [k, uniforms[k].value]);
   uniforms.uCrop.value.set(R.minX, R.minY, R.maxX, R.maxY);
   uniforms.uOutside.value = 1; uniforms.uEdit.value = 0;
-  uniforms.uGray.value = look.gray || look.values ? 1 : 0; uniforms.uLevels.value = look.values ? look.levels : 0;
-  uniforms.uBias.value = look.bias; uniforms.uBlur.value = look.blur; uniforms.uContrast.value = look.contrast; uniforms.uBright.value = look.bright;
+  setLookUniforms();
   if (withGrid) uniforms.uLineW.value = Math.max(1.5, w / 900);
   else ['uAnv', 'uAnh', 'uBnv', 'uBnh', 'uBns'].forEach((k) => (uniforms[k].value = 0));
   renderer.setRenderTarget(rt);
@@ -843,6 +882,7 @@ else document.body.classList.add('panel-closed');
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 
 syncCanvasInputs();
+renderPigmentUI();
 syncLook();
 refresh();
 resize();
