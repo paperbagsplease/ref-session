@@ -5,8 +5,15 @@
   "type": "module",
   "scripts": {
     "build": "esbuild src/main.js --bundle --minify --format=iife --target=safari15 --outfile=app.js",
-    "dev": "python3 -m http.server 8421"
+    "dev": "python3 -m http.server 8421",
+    "deploy": "wrangler deploy",
+    "preview": "wrangler dev"
   },
-  "dependencies": { "three": "^0.186.1" },
-  "devDependencies": { "esbuild": "^0.28.2" }
+  "dependencies": {
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2",
+    "wrangler": "^4.147.0"
+  }
 }
