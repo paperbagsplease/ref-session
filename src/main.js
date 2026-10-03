@@ -558,7 +558,7 @@ function renderPigmentUI() {
     + PIGMENTS.map((p, i) => `<button class="chip ${look.tint === i ? 'on' : ''}" data-i="${i}"><span class="dot" style="background:${swatch(p[1], [1, 1, 1])}"></span>${p[0]}</button>`).join('');
   $('grounds').innerHTML = GROUNDS.map((g, i) => `<button class="chip ${look.ground === i ? 'on' : ''}" data-i="${i}"><span class="dot" style="background:rgb(${g[1].map((v) => Math.round(v * 255)).join(',')})"></span>${g[0]}</button>`).join('');
   $('wash').value = look.wash;
-  $('tintRows').style.opacity = look.tint < 0 ? 0.55 : 1;
+  $('tintName').textContent = look.tint >= 0 ? PIGMENTS[look.tint][0] : 'off';
 }
 function savePig() { try { localStorage.setItem('refsession.pig', JSON.stringify({ tint: look.tint, ground: look.ground, wash: look.wash })); } catch (e) { /* ignore */ } }
 $('pigments').onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; look.tint = +b.dataset.i; renderPigmentUI(); savePig(); syncLook(); };
@@ -898,6 +898,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) naviga
 
 syncCanvasInputs();
 renderPigmentUI();
+$('tintBox').open = look.tint >= 0;
 syncLook();
 refresh();
 resize();

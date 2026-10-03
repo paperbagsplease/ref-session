@@ -204,18 +204,20 @@ body:not(.panel-closed) #panelToggle{display:none}
         <button class="btn" id="tGray">Gray <small class="x">G</small></button>
         <button class="btn" id="tValues">Values <small class="x">V</small></button>
       </div>
-      <div id="tintRows">
-        <div class="info" style="margin-top:10px"><b>Glaze tint</b> — values as a transparent pigment wash</div>
-        <div class="chips" id="pigments"></div>
-        <div class="info">Ground</div>
-        <div class="chips" id="grounds"></div>
-        <div class="row"><label>Wash</label><input id="wash" type="range" min="0.3" max="1.2" step="0.01" value="1"></div>
-      </div>
       <div class="row"><label>Levels</label><input id="levels" type="range" min="2" max="8" step="1" value="4"><span id="levelsV" class="x">4</span></div>
       <div class="row"><label>Threshold</label><input id="bias" type="range" min="-0.4" max="0.4" step="0.01" value="0"></div>
       <div class="row"><label>Blur</label><input id="blur" type="range" min="0" max="1" step="0.01" value="0"></div>
       <div class="row"><label>Contrast</label><input id="contrast" type="range" min="0.5" max="2" step="0.01" value="1"></div>
       <div class="row"><label>Brightness</label><input id="bright" type="range" min="-0.4" max="0.4" step="0.01" value="0"></div>
+      <details id="tintBox"><summary>Glaze tint <span class="x" id="tintName" style="text-transform:none;letter-spacing:0;font-weight:400;margin-left:8px"></span></summary>
+      <div id="tintRows">
+        <div class="info">Values as a transparent pigment wash</div>
+        <div class="chips" id="pigments"></div>
+        <div class="info">Ground</div>
+        <div class="chips" id="grounds"></div>
+        <div class="row"><label>Wash</label><input id="wash" type="range" min="0.3" max="1.2" step="0.01" value="1"></div>
+      </div>
+      </details>
       <div class="row"><button class="btn" id="lookReset">Reset look</button></div>
     </details>
 
